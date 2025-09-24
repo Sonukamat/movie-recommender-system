@@ -1,2 +1,2 @@
-# movie-recommender-system
+# movie-recommender
 Movie Recommender System using Streamlit
