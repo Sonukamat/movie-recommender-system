@@ -2,21 +2,34 @@ import streamlit as st
 import pickle
 import requests
 import pandas as pd
+from pathlib import Path
 
+# --- Helper to load pickle safely ---
+BASE_DIR = Path(__file__).resolve().parent
 
-def fetch_poster(movie_id):
-    url = "https://api.themoviedb.org/3/movie/{}?api_key=8265bd1679663a7ea12ac168da84d2e8&language=en-US".format(
-        movie_id)
+def load_pickle(filename):
+    p = BASE_DIR / filename
     try:
-        data = requests.get(url)
-        data = data.json()
-        poster_path = data['poster_path']
-        full_path = "https://image.tmdb.org/t/p/w500/" + poster_path
-        return full_path
+        with p.open('rb') as f:
+            return pickle.load(f)
+    except Exception as e:
+        st.error(f"❌ Error loading {filename}: {e}")
+        st.stop()
+
+# --- Fetch movie poster from TMDB ---
+def fetch_poster(movie_id):
+    url = f"https://api.themoviedb.org/3/movie/{movie_id}?api_key=8265bd1679663a7ea12ac168da84d2e8&language=en-US"
+    try:
+        data = requests.get(url).json()
+        poster_path = data.get('poster_path')
+        if poster_path:
+            return "https://image.tmdb.org/t/p/w500/" + poster_path
+        else:
+            return "https://via.placeholder.com/500x750?text=No+Image"
     except:
         return "https://via.placeholder.com/500x750?text=No+Image"
 
-
+# --- Recommendation function ---
 def recommend(movie):
     try:
         index = movies[movies['title'] == movie].index[0]
@@ -34,24 +47,19 @@ def recommend(movie):
         st.error(f"Error in recommendation: {e}")
         return [], []
 
+# --- Load data ---
+movies = load_pickle('movie_list.pkl')      # 🔥 changed here
+similarity = load_pickle('similarity.pkl')  # 🔥 changed here
 
-# Load data from local files
-try:
-    movies = pickle.load(open('model/movie_list.pkl', 'rb'))
-    similarity = pickle.load(open('model/similarity.pkl', 'rb'))
-    st.success("✅ Data loaded successfully!")
-except Exception as e:
-    st.error(f"❌ Error loading files: {e}")
-    st.stop()
-
-# Ensure movies is a DataFrame
+# Ensure movies is DataFrame
 if not isinstance(movies, pd.DataFrame):
     movies = pd.DataFrame(movies)
+
+st.success("✅ Data loaded successfully!")
 
 # --- Streamlit UI ---
 st.header('🎬 Movie Recommender System')
 
-# Get movie list
 movie_list = movies['title'].values
 
 selected_movie = st.selectbox(
@@ -66,31 +74,14 @@ if st.button('Show Recommendation'):
     if recommended_movie_names:
         st.success(f"🎯 Recommendations for: **{selected_movie}**")
 
-        # Create columns for display
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-            st.image(recommended_movie_posters[0], use_container_width=True)  # Fixed
-            st.markdown(f"**{recommended_movie_names[0]}**")
-
-        with col2:
-            st.image(recommended_movie_posters[1], use_container_width=True)  # Fixed
-            st.markdown(f"**{recommended_movie_names[1]}**")
-
-        with col3:
-            st.image(recommended_movie_posters[2], use_container_width=True)  # Fixed
-            st.markdown(f"**{recommended_movie_names[2]}**")
-
-        with col4:
-            st.image(recommended_movie_posters[3], use_container_width=True)  # Fixed
-            st.markdown(f"**{recommended_movie_names[3]}**")
-
-        with col5:
-            st.image(recommended_movie_posters[4], use_container_width=True)  # Fixed
-            st.markdown(f"**{recommended_movie_names[4]}**")
+        cols = st.columns(5)
+        for col, name, poster in zip(cols, recommended_movie_names, recommended_movie_posters):
+            with col:
+                st.image(poster, use_container_width=True)
+                st.markdown(f"**{name}**")
     else:
         st.warning("No recommendations found. Please try a different movie.")
 
-# Add some styling and information
+# Footer
 st.markdown("---")
 st.markdown("💡 *Select a movie and click 'Show Recommendation' to discover similar movies*")
